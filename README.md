@@ -1,5 +1,8 @@
 
-                                                                              Multilevel CPU Cache Simulator 🖥️⚡
+ Multilevel CPU Cache Simulator 🖥️⚡
+
+
+
 Overview
 This project is a C++ implementation of a Multilevel CPU Cache Simulator, supporting L1, L2, and L3 caches with various cache replacement policies:
 ✅ LRU (Least Recently Used)
@@ -13,6 +16,8 @@ It also supports Write-Through and Write-Back policies for memory writes.
 ![MNIST Dataset](img222.png)
 
 Features 🚀
+
+
 🔹 Multilevel Caching: Simulates a 3-level cache hierarchy (L1, L2, L3).
 🔹 Replacement Policies: Implements LRU, FIFO, and LFU for cache eviction.
 🔹 Write Policies: Supports Write-Through and Write-Back caching mechanisms.
