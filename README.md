@@ -18,11 +18,16 @@ It also supports Write-Through and Write-Back policies for memory writes.
 Features 🚀
 
 
-🔹 Multilevel Caching: Simulates a 3-level cache hierarchy (L1, L2, L3).
+🔹 Multilevel Caching: Simulates a 3-level cache hierarchy (L1, L2, L3). 
+
 🔹 Replacement Policies: Implements LRU, FIFO, and LFU for cache eviction.
+
 🔹 Write Policies: Supports Write-Through and Write-Back caching mechanisms.
+
 🔹 Cache Hit/Miss Statistics: Displays hit/miss count & percentage for performance analysis.
+
 🔹 Dynamic Visualization: Outputs cache state updates in a structured format.
+
 🔹 User Input Support: Allows users to define cache sizes & memory accesses.
 
 Final Output-
