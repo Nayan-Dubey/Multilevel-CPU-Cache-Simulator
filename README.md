@@ -35,6 +35,7 @@ Installation & Compilation 🛠️
 Using MSVC (Visual Studio Command Prompt)
 
 cl /EHsc /std:c++17 main.cpp /Fe:cache_simulator.exe .\cache_simulator.exe
+
 Using MinGW (g++)
 
 g++ -o cache_simulator.exe main.cpp .\cache_simulator.exe
