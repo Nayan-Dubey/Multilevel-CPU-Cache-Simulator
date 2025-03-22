@@ -29,13 +29,15 @@ private:
 public:
     Cache(int s, Policy p, WritePolicy wp) : size(s), policy(p), writePolicy(wp), hits(0), misses(0) {}
 
-    bool access(int address, int level) {
+    bool access(int address, int level, bool promote = false) {
         cout << "\nCache Name: | L" << level << " Cache |" << endl;
         if (policy == Policy::LRU) {
             if (lru_map.find(address) != lru_map.end()) {
-                lru_cache.erase(lru_map[address]);
-                lru_cache.push_front(address);
-                lru_map[address] = lru_cache.begin();
+                if (!promote) {
+                    lru_cache.erase(lru_map[address]);
+                    lru_cache.push_front(address);
+                    lru_map[address] = lru_cache.begin();
+                }
                 hits++;
                 cout << "Hit - Address " << address << " found in L" << level << " cache." << endl;
                 return true;
@@ -67,6 +69,13 @@ public:
         return false;
     }
 
+    void remove(int address) {
+        if (lru_map.find(address) != lru_map.end()) {
+            lru_cache.erase(lru_map[address]);
+            lru_map.erase(address);
+        }
+    }
+
     void visualize(int level) {
         cout << "Final State: |L" << level << "| Cache Blocks: [ ";
         for (int addr : lru_cache) {
@@ -94,10 +103,20 @@ public:
 
     void access(int address) {
         for (size_t i = 0; i < levels.size(); i++) {
-            if (levels[i].access(address, i + 1)) return;
+            if (levels[i].access(address, i + 1)) {
+                if (i > 0) { // Found in L2 or L3, promote to L1
+                    cout << "PROMOTION: Moving Address " << address << " from L" << (i + 1) << " to L1\n";
+                    levels[i].remove(address);
+                    levels[0].access(address, 1, true);  // Move to L1
+                }
+                return;
+            }
         }
-        cout << "Fetching Address " << address << " from Main Memory." << endl;
-        mainMemory[address] = address; // Load into memory if not present
+
+        // If not found in any level, fetch from memory
+        cout << "MISS: Fetching Address " << address << " from Main Memory and adding to L1.\n";
+        mainMemory[address] = address;
+        levels[0].access(address, 1, true);  // Load into L1
     }
 
     void visualize() {
