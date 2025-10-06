@@ -1,196 +1,239 @@
-#include <iostream>
-#include <vector>
-#include <unordered_map>
-#include <list>
-#include <queue>
-#include <cstdlib>
-#include <ctime>
-#include <climits>
-
+// multilevel_cache_policies.cpp
+#include <bits/stdc++.h>
 using namespace std;
 
-enum class Policy { LRU, FIFO, LFU };
-enum class WritePolicy { WRITE_BACK, WRITE_THROUGH };
+// ---------- LRU (for L1) ----------
+struct LRU {
+    int cap;
+    int level;
+    list<int> q; // front = MRU
+    unordered_map<int, list<int>::iterator> pos;
+    int hits=0, misses=0;
 
-unordered_map<int, int> mainMemory; // Simulating Main Memory
+    LRU(int c=4,int lvl=1):cap(c),level(lvl){}
 
-class Cache {
-private:
-    int size;
-    Policy policy;
-    WritePolicy writePolicy;
-    list<int> lru_cache;
-    unordered_map<int, list<int>::iterator> lru_map;
-    queue<int> fifo_cache;
-    unordered_map<int, int> lfu_count;
-    unordered_map<int, bool> dirtyBit;
-    int hits, misses;
-
-public:
-    Cache(int s, Policy p, WritePolicy wp) : size(s), policy(p), writePolicy(wp), hits(0), misses(0) {}
-
-    bool access(int address, int level, bool promote = false) {
-        cout << "\nCache Name: | L" << level << " Cache |" << endl;
-        if (policy == Policy::LRU) {
-            if (lru_map.find(address) != lru_map.end()) {
-                if (!promote) {
-                    lru_cache.erase(lru_map[address]);
-                    lru_cache.push_front(address);
-                    lru_map[address] = lru_cache.begin();
-                }
-                hits++;
-                cout << "Hit - Address " << address << " found in L" << level << " cache." << endl;
-                return true;
-            }
-        } else if (policy == Policy::FIFO) {
-            queue<int> tempQueue = fifo_cache;
-            while (!tempQueue.empty()) {
-                if (tempQueue.front() == address) {
-                    hits++;
-                    cout << "Hit - Address " << address << " found in L" << level << " cache." << endl;
-                    return true;
-                }
-                tempQueue.pop();
-            }
-        } else if (policy == Policy::LFU) {
-            if (lfu_count.find(address) != lfu_count.end()) {
-                lfu_count[address]++;
-                hits++;
-                cout << "Hit - Address " << address << " found in L" << level << " cache." << endl;
-                return true;
-            }
-        }
-        
-        // MISS handling
-        misses++;
-        if (policy == Policy::LRU) {
-            if (lru_cache.size() >= size) {
-                int evicted = lru_cache.back();
-                cout << "Evicting Block from L" << level << " - " << evicted << endl;
-                dirtyBit.erase(evicted);
-                lru_map.erase(evicted);
-                lru_cache.pop_back();
-            }
-            cout << "Adding Block to L" << level << " - " << address << endl;
-            lru_cache.push_front(address);
-            lru_map[address] = lru_cache.begin();
-        } else if (policy == Policy::FIFO) {
-            if (fifo_cache.size() >= size) {
-                int evicted = fifo_cache.front();
-                cout << "Evicting Block from L" << level << " - " << evicted << endl;
-                fifo_cache.pop();
-            }
-            cout << "Adding Block to L" << level << " - " << address << endl;
-            fifo_cache.push(address);
-        } else if (policy == Policy::LFU) {
-            if (lfu_count.size() >= size) {
-                int leastFreq = INT_MAX, evicted = -1;
-                for (auto& entry : lfu_count) {
-                    if (entry.second < leastFreq) {
-                        leastFreq = entry.second;
-                        evicted = entry.first;
-                    }
-                }
-                if (evicted != -1) {
-                    cout << "Evicting Block from L" << level << " - " << evicted << endl;
-                    lfu_count.erase(evicted);
-                }
-            }
-            cout << "Adding Block to L" << level << " - " << address << endl;
-            lfu_count[address] = 1;
-        }
-        return false;
+    bool containsMoveToFront(int addr) {
+        auto it = pos.find(addr);
+        if (it==pos.end()) { misses++; return false; }
+        q.erase(it->second);
+        q.push_front(addr);
+        pos[addr] = q.begin();
+        hits++;
+        return true;
     }
 
-    void remove(int address) {
-        lru_map.erase(address);
-        fifo_cache = queue<int>();
-        lfu_count.erase(address);
-    }
-
-    void visualize(int level) {
-        cout << "Final State: |L" << level << "| Cache Blocks: [ ";
-        if (policy == Policy::LRU) {
-            for (int addr : lru_cache) cout << addr << " ";
-        } else if (policy == Policy::FIFO) {
-            queue<int> temp = fifo_cache;
-            while (!temp.empty()) {
-                cout << temp.front() << " ";
-                temp.pop();
-            }
-        } else if (policy == Policy::LFU) {
-            for (auto& pair : lfu_count) cout << pair.first << " ";
+    void insert(int addr) {
+        auto it = pos.find(addr);
+        if (it != pos.end()) { // already present -> move
+            q.erase(it->second);
+            q.push_front(addr);
+            pos[addr] = q.begin();
+            return;
         }
-        cout << "]\n";
+        if ((int)q.size() >= cap) {
+            int ev = q.back(); q.pop_back(); pos.erase(ev);
+            cout << "Evicting " << ev << " from L" << level << "\n";
+        }
+        q.push_front(addr);
+        pos[addr] = q.begin();
+        cout << "Inserted " << addr << " into L" << level << "\n";
     }
 
-    void showStats(int level) {
-        cout << "Cache L" << level << " - Hits: " << hits << " | Misses: " << misses << "\n";
-        cout << "Hit Ratio: " << (hits * 100.0 / (hits + misses)) << "%\n";
+    void remove(int addr) {
+        auto it = pos.find(addr);
+        if (it != pos.end()) { q.erase(it->second); pos.erase(it); }
+    }
+
+    void visualize() const {
+        cout << "L" << level << " [MRU..LRU]: ";
+        for (int x:q) cout<<x<<" ";
+        cout<<"\n";
     }
 };
 
-class MultiLevelCache {
-private:
-    vector<Cache> levels;
+// ---------- FIFO (for L2) ----------
+struct FIFO {
+    int cap;
+    int level;
+    queue<int> q;
+    unordered_set<int> present; // O(1) membership
+    int hits=0, misses=0;
 
-public:
-    MultiLevelCache(int l1_size, int l2_size, int l3_size) {
-        levels.emplace_back(l1_size, Policy::LRU, WritePolicy::WRITE_BACK);
-        levels.emplace_back(l2_size, Policy::FIFO, WritePolicy::WRITE_THROUGH);
-        levels.emplace_back(l3_size, Policy::LFU, WritePolicy::WRITE_BACK);
+    FIFO(int c=4,int lvl=2):cap(c),level(lvl){}
+
+    bool contains(int addr) {
+        if (present.find(addr)==present.end()) { misses++; return false; }
+        hits++;
+        return true;
     }
 
-    void access(int address) {
-        for (size_t i = 0; i < levels.size(); i++) {
-            if (levels[i].access(address, i + 1)) {
-                if (i > 0) {
-                    cout << "PROMOTION: Moving Address " << address << " from L" << (i + 1) << " to L1\n";
-                    levels[i].remove(address);
-                    levels[0].access(address, 1, true);
-                }
-                return;
-            }
+    void insert(int addr) {
+        if (present.find(addr) != present.end()) return; // already present
+        if ((int)q.size() >= cap) {
+            int ev = q.front(); q.pop(); present.erase(ev);
+            cout << "Evicting " << ev << " from L" << level << "\n";
         }
-        cout << "MISS: Fetching Address " << address << " from Main Memory and adding to L1.\n";
-        mainMemory[address] = address;
-        levels[0].access(address, 1, true);
+        q.push(addr); present.insert(addr);
+        cout << "Inserted " << addr << " into L" << level << "\n";
     }
 
-    void visualize() {
-        for (size_t i = 0; i < levels.size(); i++) {
-            levels[i].visualize(i + 1);
+    void remove(int addr) {
+        if (present.find(addr) == present.end()) return;
+        // rebuild queue excluding addr (O(n) but fine for simple simulator)
+        queue<int> nq;
+        while (!q.empty()) {
+            int v = q.front(); q.pop();
+            if (v != addr) nq.push(v);
         }
+        q = move(nq);
+        present.erase(addr);
     }
 
-    void showStats() {
-        for (size_t i = 0; i < levels.size(); i++) {
-            levels[i].showStats(i + 1);
-        }
+    void visualize() const {
+        cout << "L" << level << " [FIFO order front..back]: ";
+        queue<int> tmp = q;
+        while (!tmp.empty()) { cout<<tmp.front()<<" "; tmp.pop(); }
+        cout<<"\n";
     }
 };
 
+// ---------- LFU (for L3) ----------
+struct LFU {
+    int cap;
+    int level;
+    unordered_map<int,int> freq;
+    unordered_map<int,long long> timeStamp; // tie-breaker: lower = older
+    long long timer = 0;
+    int hits=0, misses=0;
+
+    LFU(int c=4,int lvl=3):cap(c),level(lvl){}
+
+    bool containsInc(int addr) {
+        auto it = freq.find(addr);
+        if (it==freq.end()) { misses++; return false; }
+        it->second++;
+        timeStamp[addr] = ++timer;
+        hits++;
+        return true;
+    }
+
+    void insert(int addr) {
+        if (freq.find(addr) != freq.end()) { // already present -> increment and update time
+            freq[addr]++; timeStamp[addr] = ++timer; return;
+        }
+        if ((int)freq.size() >= cap) {
+            // evict least freq, break ties by oldest timeStamp
+            int evicted = -1;
+            int leastF = INT_MAX;
+            long long oldest = LLONG_MAX;
+            for (auto &p : freq) {
+                int a = p.first; int f = p.second;
+                long long t = timeStamp[a];
+                if (f < leastF || (f == leastF && t < oldest)) {
+                    leastF = f; oldest = t; evicted = a;
+                }
+            }
+            if (evicted != -1) {
+                freq.erase(evicted);
+                timeStamp.erase(evicted);
+                cout << "Evicting " << evicted << " from L" << level << "\n";
+            }
+        }
+        freq[addr] = 1;
+        timeStamp[addr] = ++timer;
+        cout << "Inserted " << addr << " into L" << level << "\n";
+    }
+
+    void remove(int addr) {
+        freq.erase(addr);
+        timeStamp.erase(addr);
+    }
+
+    void visualize() const {
+        cout << "L" << level << " [addr:freq]: ";
+        for (auto &p: freq) cout << p.first << ":" << p.second << " ";
+        cout << "\n";
+    }
+};
+
+// ---------- MultiLevel controller ----------
+struct MultiLevel {
+    LRU L1;
+    FIFO L2;
+    LFU L3;
+    int memoryFetches = 0;
+
+    MultiLevel(int c1,int c2,int c3): L1(c1,1), L2(c2,2), L3(c3,3) {}
+
+    void access(int addr) {
+        cout << "\nAccess " << addr << ":\n";
+        if (L1.containsMoveToFront(addr)) { cout << "Hit L1\n"; return; }
+
+        if (L2.contains(addr)) {
+            cout << "Hit L2 -> promote to L1\n";
+            L2.remove(addr);
+            L1.insert(addr);
+            return;
+        }
+
+        if (L3.containsInc(addr)) {
+            cout << "Hit L3 -> promote to L1\n";
+            L3.remove(addr);
+            L1.insert(addr);
+            return;
+        }
+
+        // Miss in all -> fetch from memory and insert into L1
+        cout << "Miss in L1,L2,L3 -> fetch from memory -> insert into L1\n";
+        memoryFetches++;
+        L1.insert(addr);
+    }
+
+    void visualize() const {
+        L1.visualize();
+        L2.visualize();
+        L3.visualize();
+    }
+
+    void stats() const {
+        cout << "\n=== Stats ===\n";
+        cout << "L1: hits="<<L1.hits<<", misses="<<L1.misses<<"\n";
+        cout << "L2: hits="<<L2.hits<<", misses="<<L2.misses<<"\n";
+        cout << "L3: hits="<<L3.hits<<", misses="<<L3.misses<<"\n";
+        cout << "Memory fetches: " << memoryFetches << "\n";
+    }
+};
+
+// ---------- main (demo) ----------
 int main() {
-    int l1_size, l2_size, l3_size, num_accesses;
-    cout << "Enter L1 Cache Size: ";
-    cin >> l1_size;
-    cout << "Enter L2 Cache Size: ";
-    cin >> l2_size;
-    cout << "Enter L3 Cache Size: ";
-    cin >> l3_size;
-    cout << "Enter Number of Memory Accesses: ";
-    cin >> num_accesses;
-    
-    MultiLevelCache mlc(l1_size, l2_size, l3_size);
-    srand(time(0));
-    
-    for (int i = 0; i < num_accesses; i++) {
-        int addr = rand() % 15;
-        cout << "\nAccessing Address: " << addr << "\n";
-        mlc.access(addr);
-        mlc.visualize();
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    int c1,c2,c3,n;
+    cout << "Enter sizes for L1(LRU) L2(FIFO) L3(LFU): ";
+    if (!(cin>>c1>>c2>>c3)) return 0;
+    cout << "Enter number of accesses: ";
+    cin >> n;
+
+    MultiLevel ml(c1,c2,c3);
+
+    cout << "Enter 0 to use random sequence, 1 to input addresses: ";
+    int mode; cin>>mode;
+    vector<int> seq;
+    if (mode==0) {
+        srand((unsigned)time(nullptr));
+        for (int i=0;i<n;++i) seq.push_back(rand()%10);
+    } else {
+        cout << "Enter " << n << " addresses:\n";
+        for (int i=0;i<n;++i){ int a; cin>>a; seq.push_back(a); }
     }
-    
-    mlc.showStats();
+
+    for (int a: seq) {
+        ml.access(a);
+        ml.visualize();
+    }
+    ml.stats();
+   
     return 0;
 }
+
